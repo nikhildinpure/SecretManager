@@ -36,3 +36,7 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+##custom
+/src/main/resources/drive_creds.json
+/tokens/

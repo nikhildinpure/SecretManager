@@ -1,9 +1,20 @@
 package com.secrets.vault.operations.store;
 
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import com.secrets.vault.operations.bean.Secret;
+import com.secrets.vault.operations.files.EncryptDecrypt;
+
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
+import java.io.*;
+import java.lang.reflect.Type;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 
 import static com.secrets.vault.operations.common.Utility.*;
 
@@ -72,5 +83,146 @@ public class Passwords {
         System.out.println(originalPassword);
         return originalPassword;
 
+    }
+
+    private static boolean storeSecret(String storePath, String appName, String masterPassword,String passwordToStore,boolean override) throws Exception {
+
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        File storeFile = new File(storePath);
+        List<Secret> secrets = new ArrayList<>();
+        boolean found = false;
+
+        try {
+            // Check if the file exists and is not empty
+            if (storeFile.exists() && storeFile.length() > 0) {
+
+                try (Reader reader = new FileReader(storeFile)) {
+                    // Define the type for deserialization using TypeToken to handle generics
+                    Type projectListType = new TypeToken<List<Secret>>() {}.getType();
+                    secrets = gson.fromJson(reader, projectListType);
+                }
+            }
+
+            for (Secret secret : secrets){
+                if(secret.getAppName().equalsIgnoreCase(appName)){
+                    if(!override){
+                        System.out.println("secret for App Name " + appName + " already exists" );
+                        throw new Exception(appName +" already exists!!!, Send override flag if you want to replace secret");
+                    }
+                    System.out.println("Found secret for App Name " + appName + " Updating secret...");
+                    try {
+                        secret.setSecret(encryptText(masterPassword, passwordToStore));
+                        found = true;
+                        break;
+                    }catch (Exception e) {
+                        throw new Exception("Update Failed. Failed to encrypt password "+e.getMessage());
+                    }
+                }
+            }
+
+            if(!found){
+                System.out.println("Adding Secret to Secret Store");
+                try {
+                    secrets.add(new Secret(appName, encryptText(masterPassword, passwordToStore)));
+                }catch (Exception e) {
+                    throw new Exception("Failed to Add, Failed to encrypt password " + e.getMessage());
+                }
+            }
+
+            try (Writer writer = new FileWriter(storePath)) {
+                gson.toJson(secrets, writer);
+            }
+
+            return true;
+        }catch (Exception e){
+            throw new Exception(e.getMessage());
+        }
+
+    }
+
+    public static boolean storeSecretOperations(String storePath, String appName, String masterPassword,String passwordToStore,boolean override) throws Exception {
+        EncryptDecrypt ed = new EncryptDecrypt();
+        File secretStore = new File(storePath);
+        if(secretStore.exists()){
+            ed.manage(storePath, masterPassword, 0);
+            int dotIndex = secretStore.getName().lastIndexOf('.');
+            if (dotIndex > 0) { // Ensure the dot is not the first character (e.g., ".bashrc")
+                storePath = secretStore.getParent() + File.separator + secretStore.getName().substring(0, dotIndex);
+            } else {
+                 throw new Exception("Failed to read store");
+            }
+            storeSecret(storePath, appName, masterPassword,passwordToStore,override);
+            ed.manage(storePath, masterPassword, 1);
+            if(new File(storePath).delete()){
+                System.out.println("Secret Store Secured");
+            }
+        }else{
+            if (secretStore.createNewFile()) {
+                System.out.println("Secret Store created: " + secretStore.getName());
+                storeSecret(secretStore.getAbsolutePath(), appName, masterPassword, passwordToStore,false);
+                ed.manage(storePath, masterPassword, 1);
+                File store = new File(secretStore.getAbsolutePath()+".enc");
+                if(store.exists()){
+                    System.out.println("Secret Store Created at "+store.getPath());
+                    if(secretStore.delete()){
+                        System.out.println("Secret Store Secured");
+                    };
+                }
+            } else {
+                System.out.println("SecretStore already exists.");
+            }
+        }
+        return false;
+    }
+
+    public static String readSecret(String storePath, String appName, String masterPassword) throws Exception {
+        File secretStore = new File(storePath);
+        String readableStore = "";
+        if(secretStore.exists()) {
+            EncryptDecrypt ed = new EncryptDecrypt();
+            try {
+                ed.manage(storePath, masterPassword, 0);
+                int dotIndex = secretStore.getName().lastIndexOf('.');
+                if (dotIndex > 0) { // Ensure the dot is not the first character (e.g., ".bashrc")
+                    readableStore = secretStore.getParent() + File.separator + secretStore.getName().substring(0, dotIndex);
+                } else {
+                    throw new Exception("Failed to read store");
+                }
+
+                List<Secret> secrets = new ArrayList<>();
+                Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                try (Reader reader = new FileReader(readableStore)) {
+                    // Define the type for deserialization using TypeToken to handle generics
+                    Type projectListType = new TypeToken<List<Secret>>() {
+                    }.getType();
+                    secrets = gson.fromJson(reader, projectListType);
+                }
+
+                for (Secret secret : secrets) {
+                    if (secret.getAppName().equalsIgnoreCase(appName)) {
+                        return decryptText(masterPassword, secret.getSecret());
+                    }
+                }
+
+            }catch (Exception e){
+                throw new Exception(e.getMessage());
+            }finally {
+                new File(readableStore).delete();
+            }
+        }
+
+        return "Something went wrong!!!";
+    }
+
+
+    public static void main(String[] args) {
+        try {
+            //decryptText("AbcdEfgh!#12345678",encryptText("AbcdEfgh!#12345678","StrongPassword!1234"));
+           // Passwords.storeSecret("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt","insta","AbcdEfgh!#12345678", "StrongPassword!1234",true);
+            //Passwords.storeSecretOperations("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt.enc","insta","AbcdEfgh!#12345678", "StrongPassword!1234",false);
+            System.out.println(Passwords.readSecret("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt.enc","insta","AbcdEfgh!#12345678"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
