@@ -2,13 +2,7 @@ package com.secrets.vault.operations.store;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
-import java.io.IOException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.security.spec.InvalidKeySpecException;
-import java.util.Arrays;
 import java.util.Base64;
 
 import static com.secrets.vault.operations.common.Utility.*;
@@ -78,14 +72,5 @@ public class Passwords {
         System.out.println(originalPassword);
         return originalPassword;
 
-    }
-
-
-    public static void main(String[] args) {
-        try {
-            decryptText("AbcdEfgh!#12345678",encryptText("AbcdEfgh!#12345678","StrongPassword!1234"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 }
