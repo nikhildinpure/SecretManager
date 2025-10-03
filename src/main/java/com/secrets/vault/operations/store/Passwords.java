@@ -95,7 +95,6 @@ public class Passwords {
         try {
             // Check if the file exists and is not empty
             if (storeFile.exists() && storeFile.length() > 0) {
-
                 try (Reader reader = new FileReader(storeFile)) {
                     // Define the type for deserialization using TypeToken to handle generics
                     Type projectListType = new TypeToken<List<Secret>>() {}.getType();
@@ -144,13 +143,7 @@ public class Passwords {
         EncryptDecrypt ed = new EncryptDecrypt();
         File secretStore = new File(storePath);
         if(secretStore.exists()){
-            ed.manage(storePath, masterPassword, 0);
-            int dotIndex = secretStore.getName().lastIndexOf('.');
-            if (dotIndex > 0) { // Ensure the dot is not the first character (e.g., ".bashrc")
-                storePath = secretStore.getParent() + File.separator + secretStore.getName().substring(0, dotIndex);
-            } else {
-                 throw new Exception("Failed to read store");
-            }
+            storePath = getReadableStore(storePath,masterPassword);
             boolean isStored = storeSecret(storePath, appName, masterPassword,passwordToStore,override);
             if(isStored){
                 System.out.println("Secret Stored Successfully");
@@ -193,6 +186,46 @@ public class Passwords {
         return "Something went wrong!!!";
     }
 
+    public boolean deleteSecret(String storePath,String masterPassword, String appName) throws Exception {
+        EncryptDecrypt ed = new EncryptDecrypt();
+        File secretStore = new File(storePath);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        List<Secret> secrets = new ArrayList<>();
+        if (secretStore.exists()) {
+            storePath = getReadableStore(storePath, masterPassword);
+            try {
+                // Check if the file exists and is not empty
+                try (Reader reader = new FileReader(storePath)) {
+                    // Define the type for deserialization using TypeToken to handle generics
+                    Type projectListType = new TypeToken<List<Secret>>(){}.getType();
+                    secrets = gson.fromJson(reader, projectListType);
+                }
+                for (Secret secret : secrets) {
+                    if (secret.getAppName().equalsIgnoreCase(appName)) {
+                        secrets.remove(secret);
+                        System.out.println(secret.getAppName() + " removed");
+                        break;
+                    }
+                }
+
+                try (Writer writer = new FileWriter(storePath)) {
+                    gson.toJson(secrets, writer);
+                }
+
+                System.out.println(appName + " deleted");
+                ed.manage(storePath, masterPassword, 1);
+                System.out.println("Store Secured");
+                return true;
+            }catch (Exception e) {
+                System.out.println("Failed to delete "+appName);
+                throw new Exception(e.getMessage());
+            }
+        }else{
+            System.out.println(appName + " does not exist");
+            return false;
+        }
+    }
+
     public List<Secret> listSecrets(String readableStore, String masterPassword) throws Exception {
         List<Secret> secrets = null;
         if(!readableStore.isEmpty()){
@@ -220,26 +253,6 @@ public class Passwords {
                 throw new Exception("Failed to read store");
             }
         }
-
         return readableStore;
-    }
-
-
-    public static void main(String[] args) {
-        try {
-            String masterPassword = "AbcdEfgh!#12345678";
-            //decryptText("AbcdEfgh!#12345678",encryptText("AbcdEfgh!#12345678","StrongPassword!1234"));
-            //Passwords.storeSecretOperations("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt","fb",masterPassword, "StrongPassword!1234",false);
-            //Passwords.storeSecretOperations("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt.enc","insta",masterPassword, "StrongPassword!5678",false);
-            //System.out.println(Passwords.readSecret("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt.enc","insta",masterPassword));
-            //String readableStore = getReadableStore("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretStore.txt.enc",masterPassword);
-            //List<Secret> secrets = listSecrets(readableStore,masterPassword);
-            /*for(Secret app : secrets){
-                System.out.println(readSecret(readableStore,app,masterPassword));
-            }*/
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 }

@@ -6,7 +6,9 @@ import com.google.api.services.drive.model.FileList;
 import com.google.api.client.http.FileContent;
 import com.secrets.vault.operations.common.DriveService;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
@@ -37,7 +39,7 @@ public class GoogleDrive {
         }
     }
 
-    public static void listSecrets() throws IOException, GeneralSecurityException {
+    public List<File> listSecrets() throws IOException, GeneralSecurityException {
         // Print the names and IDs for up to 10 files.
         Drive service  = new DriveService().getDriveService();
         String query = "'" + GoogleDrive.getParentFolderId() + "' in parents and trashed = false";
@@ -47,13 +49,18 @@ public class GoogleDrive {
                 .setFields("nextPageToken, files(id, name)")
                 .execute();
         List<File> files = result.getFiles();
+        System.out.println("================================");
         System.out.println("Files:");
+        System.out.println("--------------------------------");
         for (File file : files) {
-            System.out.printf("%s (%s)\n", file.getName(), file.getId());
+            System.out.println("File Id : "+file.getId());
+            System.out.println("File Name : "+file.getName());
         }
+        System.out.println("================================");
+        return files;
     }
 
-    public static String UploadSecrets(String filePath) throws GeneralSecurityException, IOException {
+    public String UploadSecrets(String filePath) throws GeneralSecurityException, IOException {
         Drive service  = new DriveService().getDriveService();
         java.io.File uploadFile = new java.io.File(filePath);
         if (!uploadFile.exists()) {
@@ -106,9 +113,43 @@ public class GoogleDrive {
         return uploadedFile.getId();
     }
 
-    public static void main(String... args) throws IOException, GeneralSecurityException {
-        //String uploadId = DriveOperations.UploadSecrets("D:\\Learnings\\Java\\SecretManagerWorkspace\\SecretManger\\src\\main\\resources\\uploadtest.txt");
-        //System.out.println("Uploaded "+uploadId);
-        listSecrets();
+    public void updateFile(String fileId, String fileToUpload) throws IOException, GeneralSecurityException {
+        Drive driveService = new DriveService().getDriveService();
+        // Create a File object for the updated metadata (optional, can be null if only content is updated)
+        File fileMetadata = new File();
+        // You can update metadata fields like name, description, etc. if needed
+        // fileMetadata.setName("New File Name");
+
+        // Create a FileContent object with the new content
+        FileContent mediaContent = new FileContent(null, new java.io.File(fileToUpload)); // Mime type will be detected automatically
+
+        try {
+            // Perform the update operation
+            File updatedFile = driveService.files().update(fileId,fileMetadata,mediaContent).execute();
+            System.out.println("File updated successfully. New file ID: " + updatedFile.getId());
+        } catch (IOException e) {
+            System.err.println("An error occurred: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Downloads a file from Google Drive.
+     * @param service The Drive service instance.
+     * @param fileId The ID of the file to download.
+     * @param downloadPath The local path to save the file.
+     * @throws IOException
+     */
+    public void downloadFile(String fileId, String downloadPath) throws IOException, GeneralSecurityException {
+        Drive service = new DriveService().getDriveService();
+        try (OutputStream outputStream = new FileOutputStream(downloadPath)) {
+            System.out.println("Downloading standard file content for file ID: " + fileId);
+
+            service.files().get(fileId).executeMediaAndDownloadTo(outputStream);
+            System.out.println("Download successful! File saved to: " + downloadPath);
+        } catch (IOException e) {
+            System.err.println("An error occurred during file download: " + e.getMessage());
+            throw e; // Re-throw the exception for further handling
+        }
     }
 }
